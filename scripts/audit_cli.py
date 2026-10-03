@@ -9,11 +9,96 @@ import json
 import sys
 from pathlib import Path
 
+def load_and_validate_songs(input_path):
+    """
+    Loads JSON from input_path and validates structure.
+    Accepts:
+      - A list of song dicts: [{"song": "...", "artist": "...", "scores": [...]}, ...]
+      - A dict wrapping songs: {"songs": [...]} or {"data": [...]}
+      - A single song dict: {"song": "...", "artist": "...", "scores": [...]} (auto-wrapped into list)
+    Exits with a clear, user-friendly error message if invalid.
+    """
+    path = Path(input_path)
+    if not path.is_file():
+        sys.exit(f"Error: Input file does not exist: {input_path}")
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        sys.exit(f"Error: Failed to parse JSON from '{input_path}': {e}")
+    except Exception as e:
+        sys.exit(f"Error: Unable to read '{input_path}': {e}")
+
+    # Handle dictionary inputs
+    if isinstance(data, dict):
+        if "songs" in data and isinstance(data["songs"], list):
+            songs = data["songs"]
+        elif "data" in data and isinstance(data["data"], list):
+            songs = data["data"]
+        elif "song" in data or "title" in data or "scores" in data:
+            # Single song object provided as dict
+            songs = [data]
+        else:
+            sys.exit(
+                f"Error: Expected a list of songs or a dict containing a 'songs' or 'data' list in '{input_path}', "
+                f"but received a dictionary with keys: {list(data.keys())}."
+            )
+    elif isinstance(data, list):
+        songs = data
+    else:
+        sys.exit(
+            f"Error: Invalid JSON structure in '{input_path}'. Expected a list of song objects, got {type(data).__name__}."
+        )
+
+    # Validate individual items
+    validated_songs = []
+    for idx, item in enumerate(songs):
+        if not isinstance(item, dict):
+            sys.exit(f"Error: Item at index {idx} is not a valid song object (got {type(item).__name__}).")
+
+        # Normalize title/song field
+        song_title = item.get("song") or item.get("title") or f"Untitled Track {idx + 1}"
+        artist = item.get("artist") or item.get("singer") or "Unknown Artist"
+
+        # Validate scores
+        raw_scores = item.get("scores")
+        if raw_scores is None:
+            scores = [0] * 8
+        elif isinstance(raw_scores, list):
+            try:
+                scores = [float(x) for x in raw_scores]
+                if len(scores) < 8:
+                    scores.extend([0.0] * (8 - len(scores)))
+                else:
+                    scores = scores[:8]
+            except (ValueError, TypeError):
+                sys.exit(f"Error: 'scores' for song '{song_title}' must contain numeric values (0-5). Got: {raw_scores}")
+        else:
+            sys.exit(f"Error: 'scores' for song '{song_title}' must be a list of 8 numbers, got {type(raw_scores).__name__}.")
+
+        normalized_item = dict(item)
+        normalized_item["song"] = song_title
+        normalized_item["artist"] = artist
+        normalized_item["scores"] = scores
+        validated_songs.append(normalized_item)
+
+    return validated_songs
+
 def calculate_stats(songs):
     total = len(songs)
     if total == 0:
-        return {}
-    
+        return {
+            "total_songs": 0,
+            "laghw_count": 0, "laghw_pct": 0.0,
+            "major_sin_count": 0, "major_sin_pct": 0.0,
+            "fahsh_count": 0, "fahsh_pct": 0.0,
+            "glorif_sin_count": 0, "glorif_sin_pct": 0.0,
+            "theol_risk_count": 0, "theol_risk_pct": 0.0,
+            "kibr_count": 0, "kibr_pct": 0.0,
+            "violence_count": 0, "violence_pct": 0.0,
+        }
+
     stats = {
         "total_songs": total,
         "laghw_count": sum(1 for s in songs if s.get("scores", [0]*8)[5] >= 3),
@@ -320,8 +405,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "stats":
-        with open(args.input, "r", encoding="utf-8") as f:
-            songs = json.load(f)
+        songs = load_and_validate_songs(args.input)
         stats = calculate_stats(songs)
         output_data = json.dumps(stats, indent=2)
         if args.output:
@@ -332,8 +416,7 @@ def main():
             print(output_data)
 
     elif args.command == "generate-html":
-        with open(args.input, "r", encoding="utf-8") as f:
-            songs = json.load(f)
+        songs = load_and_validate_songs(args.input)
         render_html_dashboard(songs, args.title, args.subtitle, args.output)
 
 if __name__ == "__main__":

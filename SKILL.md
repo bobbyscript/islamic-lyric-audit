@@ -77,9 +77,10 @@ Tabulate the occurrence across the dataset:
 
 ### Step 4: Generate Interactive Deliverables
 * Create a Markdown audit report saved in the brain/workspace.
-* Use the bundled CLI helper to generate a self-contained, interactive HTML dashboard:
+* Use the bundled CLI helper (`scripts/audit_cli.py`) to generate a self-contained, interactive HTML dashboard:
   ```bash
-  python3 /Users/bobby/.gemini/config/skills/islamic-lyric-audit/scripts/audit_cli.py generate-html \
+  # Run directly from the skill directory or repo root:
+  python3 scripts/audit_cli.py generate-html \
     --input <path_to_audit.json> \
     --output <path_to_report.html> \
     --title "Islamic Lyric Audit Report" \
